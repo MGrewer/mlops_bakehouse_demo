@@ -1,0 +1,56 @@
+bundle:
+  name: bakehouse_mlops_demo
+
+workspace:
+  host: ${var.workspace_host}
+
+variables:
+  workspace_host:
+    description: Databricks workspace URL
+  dev_cluster_id:
+    description: Cluster ID for dev target
+  prod_cluster_id:
+    description: Cluster ID for prod target
+  notebook_root:
+    description: Root path for notebook references
+
+resources:
+  jobs:
+    bakehouse_model_watcher:
+      name: bakehouse_model_watcher
+      schedule:
+        quartz_cron_expression: "0 0 */6 * * ?"
+        timezone_id: America/Detroit
+      tasks:
+        - task_key: monitoring
+          notebook_task:
+            notebook_path: ./05_monitoring
+          existing_cluster_id: ${var.cluster_id}
+
+        - task_key: evaluation
+          depends_on:
+            - task_key: monitoring
+          notebook_task:
+            notebook_path: ./06_evaluation
+          existing_cluster_id: ${var.cluster_id}
+
+        - task_key: retraining
+          depends_on:
+            - task_key: evaluation
+          notebook_task:
+            notebook_path: ./07_retraining
+          existing_cluster_id: ${var.cluster_id}
+
+targets:
+  dev:
+    default: true
+    variables:
+      cluster_id: ${var.dev_cluster_id}
+    workspace:
+      root_path: /Workspace/Users/mitchell.grewer@databricks.com/mlops_bakehouse_demo/bakehouse_mlops_demo
+
+  prod:
+    variables:
+      cluster_id: ${var.prod_cluster_id}
+    workspace:
+      root_path: /Workspace/Shared/bakehouse_mlops_published
