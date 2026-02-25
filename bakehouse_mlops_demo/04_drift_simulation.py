@@ -148,41 +148,42 @@ print(f"Predictions appended to {PREDICTIONS_TABLE} (offset +1 day for drift win
 
 # COMMAND ----------
 
-# Cell 03 — Reset demo: clean up drift artifacts and restore baseline
-#
-# ── NOTE ───────────────────────────────────────────────────────────────
-#   Tags make this cleanup possible. We search for runs where
-#   tags.drift_simulation='true' and delete only those, leaving the baseline
-#   training and inference runs untouched. The predictions table cleanup uses the
-#   offset timestamp — drifted rows have scored_at in the future, so we can
-#   surgically remove them.
-# ────────────────────────────────────────────────────────────────────────────────
-
-from mlflow import MlflowClient
-
-client = MlflowClient()
-
-experiment = client.get_experiment_by_name(EXPERIMENT_NAME)
-if experiment:
-    drift_runs = client.search_runs(
-        experiment_ids=[experiment.experiment_id],
-        filter_string="tags.drift_simulation = 'true'",
-    )
-    for run in drift_runs:
-        client.delete_run(run.info.run_id)
-        print(f"Deleted drift run: {run.info.run_id}")
-
-    print(f"Removed {len(drift_runs)} drift run(s)")
-else:
-    print("Experiment not found — nothing to clean")
-
-try:
-    deleted = spark.sql(f"""
-        DELETE FROM {PREDICTIONS_TABLE}
-        WHERE scored_at > current_timestamp()
-    """)
-    print(f"Removed drifted rows (offset timestamps) from {PREDICTIONS_TABLE}")
-except Exception as e:
-    print(f"Could not clean predictions table: {e}")
-
-print(f"Demo state reset for {model_variant}")
+# MAGIC %skip
+# MAGIC # Cell 03 — Reset demo: clean up drift artifacts and restore baseline
+# MAGIC #
+# MAGIC # ── NOTE ───────────────────────────────────────────────────────────────
+# MAGIC #   Tags make this cleanup possible. We search for runs where
+# MAGIC #   tags.drift_simulation='true' and delete only those, leaving the baseline
+# MAGIC #   training and inference runs untouched. The predictions table cleanup uses the
+# MAGIC #   offset timestamp — drifted rows have scored_at in the future, so we can
+# MAGIC #   surgically remove them.
+# MAGIC # ────────────────────────────────────────────────────────────────────────────────
+# MAGIC
+# MAGIC from mlflow import MlflowClient
+# MAGIC
+# MAGIC client = MlflowClient()
+# MAGIC
+# MAGIC experiment = client.get_experiment_by_name(EXPERIMENT_NAME)
+# MAGIC if experiment:
+# MAGIC     drift_runs = client.search_runs(
+# MAGIC         experiment_ids=[experiment.experiment_id],
+# MAGIC         filter_string="tags.drift_simulation = 'true'",
+# MAGIC     )
+# MAGIC     for run in drift_runs:
+# MAGIC         client.delete_run(run.info.run_id)
+# MAGIC         print(f"Deleted drift run: {run.info.run_id}")
+# MAGIC
+# MAGIC     print(f"Removed {len(drift_runs)} drift run(s)")
+# MAGIC else:
+# MAGIC     print("Experiment not found — nothing to clean")
+# MAGIC
+# MAGIC try:
+# MAGIC     deleted = spark.sql(f"""
+# MAGIC         DELETE FROM {PREDICTIONS_TABLE}
+# MAGIC         WHERE scored_at > current_timestamp()
+# MAGIC     """)
+# MAGIC     print(f"Removed drifted rows (offset timestamps) from {PREDICTIONS_TABLE}")
+# MAGIC except Exception as e:
+# MAGIC     print(f"Could not clean predictions table: {e}")
+# MAGIC
+# MAGIC print(f"Demo state reset for {model_variant}")
