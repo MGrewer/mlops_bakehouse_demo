@@ -202,7 +202,11 @@ for i, params in enumerate(sweep_configs):
         import tempfile, os
         with tempfile.TemporaryDirectory() as tmpdir:
             train_path = os.path.join(tmpdir, "training_data.parquet")
-            X_train.assign(quantity=y_train).to_parquet(train_path, index=False)
+            train_df = pd.DataFrame(
+                X_train.values, columns=X_train.columns
+            )
+            train_df["quantity"] = y_train.values
+            train_df.to_parquet(train_path, index=False)
             mlflow.log_artifact(train_path, artifact_path="datasets")
 
         pipeline = build_pipeline(params)
