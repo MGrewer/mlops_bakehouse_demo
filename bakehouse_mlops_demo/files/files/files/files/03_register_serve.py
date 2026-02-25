@@ -1,19 +1,17 @@
 # Databricks notebook source
-# Cell 01 — Config (select which model to serve)
+# Cell 01 — Config and review registered model versions
 
 import mlflow
 from mlflow import MlflowClient
 from pyspark.sql import functions as F
 
-dbutils.widgets.dropdown("model_variant", "decorators", ["autolog", "decorators"])
-model_variant = dbutils.widgets.get("model_variant")
-
 CATALOG = "mjrent_uc_int"
-SCHEMA = "dev_mlops"
-MODEL_NAME = f"{CATALOG}.{SCHEMA}.bakehouse_{model_variant}_model"
-ENDPOINT_NAME = f"bakehouse-{model_variant}-endpoint"
+SCHEMA_DEV = "dev_mlops"
+SCHEMA_PROD = "prod_mlops"
+MODEL_NAME = f"{CATALOG}.{SCHEMA_DEV}.bakehouse_demand_model"
+ENDPOINT_NAME = "bakehouse-demand-endpoint"
 INFERENCE_TABLE_CATALOG = CATALOG
-INFERENCE_TABLE_SCHEMA = SCHEMA
+INFERENCE_TABLE_SCHEMA = SCHEMA_PROD
 
 mlflow.set_registry_uri("databricks-uc")
 client = MlflowClient()
@@ -21,9 +19,6 @@ client = MlflowClient()
 versions = client.search_model_versions(f"name='{MODEL_NAME}'")
 for v in sorted(versions, key=lambda x: int(x.version)):
     print(f"  Version {v.version} | Run ID: {v.run_id} | Status: {v.status}")
-
-print(f"\nServing model: {MODEL_NAME}")
-print(f"Endpoint: {ENDPOINT_NAME}")
 
 # COMMAND ----------
 
@@ -39,12 +34,13 @@ print(f"Set alias 'champion' on {MODEL_NAME} version {latest_version.version}")
 
 # COMMAND ----------
 
-# Cell 03 — Deploy serving endpoint
+# Cell 03 — Deploy serving endpoint with inference table enabled
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.serving import (
     EndpointCoreConfigInput,
     ServedEntityInput,
+    AutoCaptureConfigInput,
 )
 
 w = WorkspaceClient()
@@ -58,11 +54,18 @@ served_entities = [
     )
 ]
 
+auto_capture_config = AutoCaptureConfigInput(
+    catalog_name=INFERENCE_TABLE_CATALOG,
+    schema_name=INFERENCE_TABLE_SCHEMA,
+    enabled=True,
+)
+
 try:
     w.serving_endpoints.create(
         name=ENDPOINT_NAME,
         config=EndpointCoreConfigInput(
             served_entities=served_entities,
+            auto_capture_config=auto_capture_config,
         ),
     )
     print(f"Creating endpoint: {ENDPOINT_NAME}")
@@ -71,45 +74,17 @@ except Exception as e:
         w.serving_endpoints.update_config(
             name=ENDPOINT_NAME,
             served_entities=served_entities,
+            auto_capture_config=auto_capture_config,
         )
         print(f"Updating existing endpoint: {ENDPOINT_NAME}")
     else:
         raise e
 
-# COMMAND ----------
-
-# Cell 04 — Enable AI Gateway inference table
-
-import requests
-import json
-
-host = dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiUrl().get()
-token = dbutils.notebook.entry_point.getDbutils().notebook().getContext().apiToken().get()
-
-ai_gateway_config = {
-    "inference_table_config": {
-        "catalog_name": INFERENCE_TABLE_CATALOG,
-        "schema_name": INFERENCE_TABLE_SCHEMA,
-        "enabled": True,
-    }
-}
-
-response = requests.put(
-    f"{host}/api/2.0/serving-endpoints/{ENDPOINT_NAME}/ai-gateway",
-    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-    json=ai_gateway_config,
-)
-
-if response.status_code == 200:
-    print(f"AI Gateway inference table enabled")
-    print(f"Table: {INFERENCE_TABLE_CATALOG}.{INFERENCE_TABLE_SCHEMA}.{ENDPOINT_NAME}_payload")
-else:
-    print(f"Error: {response.status_code}")
-    print(response.text)
+print(f"Inference table will be written to {INFERENCE_TABLE_CATALOG}.{INFERENCE_TABLE_SCHEMA}")
 
 # COMMAND ----------
 
-# Cell 05 — Send test requests to the serving endpoint
+# Cell 04 — Send test requests to the serving endpoint
 
 import time
 from databricks.sdk.service.serving import EndpointStateReady
@@ -160,7 +135,7 @@ print(f"Predictions: {response.predictions}")
 
 # COMMAND ----------
 
-# Cell 06 — Query the AI Gateway inference table
+# Cell 05 — Query the auto-generated inference table
 
 import time
 

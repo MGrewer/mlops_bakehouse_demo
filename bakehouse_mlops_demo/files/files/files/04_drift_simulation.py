@@ -25,32 +25,7 @@ print(f"Experiment: {EXPERIMENT_NAME}")
 # COMMAND ----------
 
 # Cell 02 — Simulate drift: corrupt features, score, log degraded metrics
-#
-# ── NOTES ──────────────────────────────────────────────────────────────
-#
-# TAGS AS OPERATIONAL MARKERS:
-#   We tag this run with drift_simulation=true. Tags aren't just labels — they're
-#   searchable filters. The reset cell (Cell 03) uses this tag to find and delete
-#   only the drift runs without touching baseline runs. In production, you'd use
-#   tags like pipeline_stage=staging, triggered_by=scheduler, or alert_id=xyz
-#   to organize and filter runs programmatically.
-#
-# METRICS UNDER DRIFT:
-#   The same metric names (batch_rmse, batch_mae, batch_r2) are logged here as
-#   in notebook 02's baseline run. This consistency is what makes the monitoring
-#   job (notebook 06) work — it queries the latest batch_rmse and batch_r2 values
-#   regardless of which run produced them. When drift degrades these metrics past
-#   the thresholds, the evaluation job (notebook 07) flags for retraining.
-#
-# PREDICTIONS TABLE — APPEND FOR DRIFT WINDOWS:
-#   The drifted predictions are appended (not overwritten) with scored_at offset
-#   by +1 day. This gives Lakehouse Monitoring two distinct time windows to
-#   compare: the clean baseline window from notebook 02, and the drifted window
-#   from this cell. Without separate windows, the monitor has nothing to measure
-#   drift against.
-# ────────────────────────────────────────────────────────────────────────────────
 
-from mlflow import MlflowClient
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
 transactions = spark.table("samples.bakehouse.sales_transactions")
@@ -107,17 +82,12 @@ y_actual = pdf_drifted[target]
 model = mlflow.sklearn.load_model(f"models:/{MODEL_NAME}@champion")
 y_pred = model.predict(X_drifted)
 
-client = MlflowClient()
-champion_version = client.get_model_version_by_alias(MODEL_NAME, "champion")
-
 rmse = float(np.sqrt(mean_squared_error(y_actual, y_pred)))
 mae = float(mean_absolute_error(y_actual, y_pred))
 r2 = float(r2_score(y_actual, y_pred))
 
 with mlflow.start_run(run_name=f"batch_inference_drifted_{model_variant}") as run:
-    # ── TAG: marks this run so it can be filtered and cleaned up ──
     mlflow.set_tag("drift_simulation", "true")
-    # ── METRICS: same names as baseline, degraded values ──
     mlflow.log_metric("batch_rmse", rmse)
     mlflow.log_metric("batch_mae", mae)
     mlflow.log_metric("batch_r2", r2)
@@ -130,33 +100,20 @@ results_pdf = pd.DataFrame({
     "actual_quantity": y_actual.values,
     "predicted_quantity": y_pred,
     "residual": y_actual.values - y_pred,
-    "model_version": str(champion_version.version),
 })
 
-# Offset scored_at by +1 day so Lakehouse Monitoring sees a separate time window
-results_sdf = (
-    spark.createDataFrame(results_pdf)
-    .withColumn("scored_at", F.current_timestamp() + F.expr("INTERVAL 1 DAY"))
-)
-results_sdf.write.mode("append").saveAsTable(PREDICTIONS_TABLE)
+results_sdf = spark.createDataFrame(results_pdf).withColumn("scored_at", F.current_timestamp())
+results_sdf.write.mode("overwrite").saveAsTable(PREDICTIONS_TABLE)
 
 print(f"Drifted metrics:")
 print(f"  RMSE: {rmse:.4f}")
 print(f"  MAE:  {mae:.4f}")
 print(f"  R2:   {r2:.4f}")
-print(f"Predictions appended to {PREDICTIONS_TABLE} (offset +1 day for drift window)")
+print(f"Predictions written to {PREDICTIONS_TABLE}")
 
 # COMMAND ----------
 
 # Cell 03 — Reset demo: clean up drift artifacts and restore baseline
-#
-# ── NOTE ───────────────────────────────────────────────────────────────
-#   Tags make this cleanup possible. We search for runs where
-#   tags.drift_simulation='true' and delete only those, leaving the baseline
-#   training and inference runs untouched. The predictions table cleanup uses the
-#   offset timestamp — drifted rows have scored_at in the future, so we can
-#   surgically remove them.
-# ────────────────────────────────────────────────────────────────────────────────
 
 from mlflow import MlflowClient
 
@@ -177,12 +134,9 @@ else:
     print("Experiment not found — nothing to clean")
 
 try:
-    deleted = spark.sql(f"""
-        DELETE FROM {PREDICTIONS_TABLE}
-        WHERE scored_at > current_timestamp()
-    """)
-    print(f"Removed drifted rows (offset timestamps) from {PREDICTIONS_TABLE}")
+    spark.sql(f"DROP TABLE IF EXISTS {PREDICTIONS_TABLE}")
+    print(f"Dropped predictions table: {PREDICTIONS_TABLE}")
 except Exception as e:
-    print(f"Could not clean predictions table: {e}")
+    print(f"Could not drop predictions table: {e}")
 
 print(f"Demo state reset for {model_variant}")

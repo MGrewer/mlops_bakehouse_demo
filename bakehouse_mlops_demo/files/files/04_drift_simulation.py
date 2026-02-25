@@ -25,30 +25,6 @@ print(f"Experiment: {EXPERIMENT_NAME}")
 # COMMAND ----------
 
 # Cell 02 — Simulate drift: corrupt features, score, log degraded metrics
-#
-# ── NOTES ──────────────────────────────────────────────────────────────
-#
-# TAGS AS OPERATIONAL MARKERS:
-#   We tag this run with drift_simulation=true. Tags aren't just labels — they're
-#   searchable filters. The reset cell (Cell 03) uses this tag to find and delete
-#   only the drift runs without touching baseline runs. In production, you'd use
-#   tags like pipeline_stage=staging, triggered_by=scheduler, or alert_id=xyz
-#   to organize and filter runs programmatically.
-#
-# METRICS UNDER DRIFT:
-#   The same metric names (batch_rmse, batch_mae, batch_r2) are logged here as
-#   in notebook 02's baseline run. This consistency is what makes the monitoring
-#   job (notebook 06) work — it queries the latest batch_rmse and batch_r2 values
-#   regardless of which run produced them. When drift degrades these metrics past
-#   the thresholds, the evaluation job (notebook 07) flags for retraining.
-#
-# PREDICTIONS TABLE — APPEND FOR DRIFT WINDOWS:
-#   The drifted predictions are appended (not overwritten) with scored_at offset
-#   by +1 day. This gives Lakehouse Monitoring two distinct time windows to
-#   compare: the clean baseline window from notebook 02, and the drifted window
-#   from this cell. Without separate windows, the monitor has nothing to measure
-#   drift against.
-# ────────────────────────────────────────────────────────────────────────────────
 
 from mlflow import MlflowClient
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
@@ -115,9 +91,7 @@ mae = float(mean_absolute_error(y_actual, y_pred))
 r2 = float(r2_score(y_actual, y_pred))
 
 with mlflow.start_run(run_name=f"batch_inference_drifted_{model_variant}") as run:
-    # ── TAG: marks this run so it can be filtered and cleaned up ──
     mlflow.set_tag("drift_simulation", "true")
-    # ── METRICS: same names as baseline, degraded values ──
     mlflow.log_metric("batch_rmse", rmse)
     mlflow.log_metric("batch_mae", mae)
     mlflow.log_metric("batch_r2", r2)
@@ -133,7 +107,6 @@ results_pdf = pd.DataFrame({
     "model_version": str(champion_version.version),
 })
 
-# Offset scored_at by +1 day so Lakehouse Monitoring sees a separate time window
 results_sdf = (
     spark.createDataFrame(results_pdf)
     .withColumn("scored_at", F.current_timestamp() + F.expr("INTERVAL 1 DAY"))
@@ -149,14 +122,6 @@ print(f"Predictions appended to {PREDICTIONS_TABLE} (offset +1 day for drift win
 # COMMAND ----------
 
 # Cell 03 — Reset demo: clean up drift artifacts and restore baseline
-#
-# ── NOTE ───────────────────────────────────────────────────────────────
-#   Tags make this cleanup possible. We search for runs where
-#   tags.drift_simulation='true' and delete only those, leaving the baseline
-#   training and inference runs untouched. The predictions table cleanup uses the
-#   offset timestamp — drifted rows have scored_at in the future, so we can
-#   surgically remove them.
-# ────────────────────────────────────────────────────────────────────────────────
 
 from mlflow import MlflowClient
 

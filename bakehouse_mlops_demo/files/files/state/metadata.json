@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "config": {
+    "bundle": {
+      "name": "bakehouse_mlops_demo",
+      "target": "dev",
+      "git": {
+        "branch": "main",
+        "origin_url": "https://github.com/MGrewer/mlops_bakehouse_demo/",
+        "commit": "7f36ef6e1087d1fea03d208bb900a158cfc05844",
+        "bundle_root_path": "bakehouse_mlops_demo"
+      }
+    },
+    "workspace": {
+      "file_path": "/Workspace/Users/mitchell.grewer@databricks.com/mlops_bakehouse_demo/bakehouse_mlops_demo/files"
+    },
+    "resources": {
+      "jobs": {
+        "bakehouse_model_watcher": {
+          "id": "460748871594150",
+          "relative_path": "databricks.yml"
+        }
+      }
+    },
+    "presets": {
+      "source_linked_deployment": false
+    }
+  },
+  "extra": {
+    "git_folder_path": "/Workspace/Users/mitchell.grewer@databricks.com/mlops_bakehouse_demo"
+  }
+}

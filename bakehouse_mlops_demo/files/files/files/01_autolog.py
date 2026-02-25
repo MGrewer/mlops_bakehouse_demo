@@ -68,35 +68,6 @@ print(f"Training: {X_train.shape[0]} rows | Test: {X_test.shape[0]} rows")
 # COMMAND ----------
 
 # Cell 03 — Train with mlflow.autolog() and register to Unity Catalog
-#
-# ── NOTES ──────────────────────────────────────────────────────────────
-#
-# AUTOLOG BEHAVIOR — what it captures for free:
-#
-#   PARAMETERS: Every hyperparameter from the sklearn estimator (n_estimators,
-#     max_depth, random_state, etc.) is captured automatically as key-value pairs.
-#     These describe HOW the model was trained. No mlflow.log_param() needed.
-#
-#   METRICS: Training-time metrics (training_score, etc.) are logged automatically.
-#     These are numeric performance measurements captured during .fit().
-#
-#   TAGS: MLflow sets system tags automatically (mlflow.user, mlflow.source.name,
-#     mlflow.source.type). No custom business tags are set.
-#
-#   MODEL ARTIFACT: The trained pipeline is serialized and logged. MLflow captures
-#     the flavor (sklearn), creates an MLmodel file for loading/serving, and
-#     generates conda.yaml + requirements.txt for environment reproducibility.
-#
-# AUTOLOG GAPS — what it does NOT capture:
-#
-#   - No dataset lineage (requires explicit mlflow.log_input())
-#   - No custom tags for business context (requires mlflow.set_tag())
-#   - No batch inference metrics on new/held-out data
-#   - No model signature or input example by default
-#
-# Bottom line: autolog is great for getting started quickly, but production
-# workflows need explicit logging for full observability. Notebook 02 shows how.
-# ────────────────────────────────────────────────────────────────────────────────
 
 import mlflow
 from sklearn.pipeline import Pipeline
@@ -131,13 +102,6 @@ print(f"Model registered to {MODEL_NAME}")
 # COMMAND ----------
 
 # Cell 04 — Batch inference: autolog does NOT capture evaluation metrics on new data
-#
-# ── NOTE ───────────────────────────────────────────────────────────────
-#   These metrics are computed locally but never logged to MLflow. Autolog only
-#   instruments .fit() — anything computed after training (batch scoring,
-#   holdout evaluation, A/B comparison) is invisible to the tracking server
-#   unless you log it explicitly. This is the gap notebook 02 fills.
-# ────────────────────────────────────────────────────────────────────────────────
 
 import numpy as np
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score

@@ -1,0 +1,36 @@
+bundle:
+  name: bakehouse_mlops_demo
+
+resources:
+  jobs:
+    bakehouse_model_watcher:
+      name: bakehouse_model_watcher
+      schedule:
+        quartz_cron_expression: "0 0 */6 * * ?"
+        timezone_id: America/Detroit
+      tasks:
+        - task_key: monitoring
+          notebook_task:
+            notebook_path: ./05_monitoring.py
+
+        - task_key: evaluation
+          depends_on:
+            - task_key: monitoring
+          notebook_task:
+            notebook_path: ./06_evaluation.py
+
+        - task_key: retraining
+          depends_on:
+            - task_key: evaluation
+          notebook_task:
+            notebook_path: ./07_retraining.py
+
+targets:
+  dev:
+    default: true
+    workspace:
+      root_path: /Workspace/Users/mitchell.grewer@databricks.com/mlops_bakehouse_demo/bakehouse_mlops_demo
+
+  prod:
+    workspace:
+      root_path: /Workspace/Shared/bakehouse_mlops_published

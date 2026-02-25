@@ -9,10 +9,10 @@ End-to-end MLOps lifecycle on Databricks using the `samples.bakehouse` dataset. 
 │  DEV — Interactive Demo Notebooks                               │
 │                                                                 │
 │  01 Autolog              02 Decorators                          │
-│  experiment:             experiment:                            │
-│    bakehouse_autolog       bakehouse_decorators                 │
-│  model:                  model:                                 │
-│    bakehouse_autolog_      bakehouse_decorators_                │
+│  experiment:             experiment:                             │
+│    bakehouse_autolog       bakehouse_decorators                  │
+│  model:                  model:                                  │
+│    bakehouse_autolog_      bakehouse_decorators_                 │
 │    model                   model                                │
 │                                                                 │
 │  03 Register + Serve (parameterized — pick any model)           │
